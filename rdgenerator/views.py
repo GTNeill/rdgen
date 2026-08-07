@@ -1,6 +1,6 @@
 import io
 from pathlib import Path
-from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
+from django.http import HttpResponse, JsonResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import render, get_object_or_404
 from django.core.files.base import ContentFile
 import os
@@ -382,7 +382,11 @@ def generator_view(request):
         form = GenerateForm(request.POST, request.FILES)
         if form.is_valid():
             params = form.cleaned_data
-            full_url = f"{_settings.PROTOCOL}://{request.get_host()}" if _settings.GENURL else f"{_settings.PROTOCOL}://{request.get_host()}"
+            # GENURL is the base URL the GitHub runners call back on. It may
+            # carry a secret path prefix so the unauthenticated callback routes
+            # can bypass the reverse proxy's basic auth. Fall back to the
+            # request host when GENURL is unset.
+            full_url = _settings.GENURL.rstrip("/") if _settings.GENURL else f"{_settings.PROTOCOL}://{request.get_host()}"
             result = generate_custom_client(params, full_url)
             if result['success']:
                 return render(request, 'waiting.html', {
@@ -454,7 +458,12 @@ def get_png(request):
     filename = request.GET['filename']
     uuid = request.GET['uuid']
     #filename = filename+".exe"
-    file_path = os.path.join('png',uuid,filename)
+    file_path = os.path.abspath(os.path.join('png', uuid, filename))
+    base_dir = os.path.abspath('png')
+    if not file_path.startswith(base_dir + os.sep):
+        return HttpResponseForbidden("Invalid filename")
+    if not os.path.isfile(file_path):
+        return HttpResponseNotFound("No such image")
     with open(file_path, 'rb') as file:
         response = HttpResponse(file, headers={
             'Content-Type': 'application/vnd.microsoft.portable-executable',
@@ -613,6 +622,8 @@ def get_zip(request):
     file_path = os.path.abspath(os.path.join(base_dir, filename))
     if not file_path.startswith(base_dir + os.sep):
         return HttpResponseForbidden("Invalid filename")
+    if not os.path.isfile(file_path):
+        return HttpResponseNotFound("No such zip")
     with open(file_path, 'rb') as file:
         response = HttpResponse(file, headers={
             'Content-Type': 'application/vnd.microsoft.portable-executable',
