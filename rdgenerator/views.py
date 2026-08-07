@@ -32,7 +32,11 @@ def generate_custom_client(params, full_url):
         On failure: includes 'error' and optionally 'status_code'.
     """
     user_secret = params.get('sh_secret_field', '')
-    selfhosted = (_settings.SH_SECRET == user_secret)
+    # An empty SH_SECRET must never enable self-hosted builds: the form field is
+    # also empty by default, so '' == '' would silently route every build to the
+    # sh-* workflows, which run on `self-hosted` runners and queue forever when
+    # no such runner is registered.
+    selfhosted = bool(_settings.SH_SECRET) and _settings.SH_SECRET == user_secret
     platform = params.get('platform', 'windows')
     version = params.get('version', '1.4.9')
     delayFix = params.get('delayFix', True)
