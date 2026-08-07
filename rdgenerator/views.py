@@ -265,7 +265,9 @@ def generate_custom_client(params, full_url):
     }
 
     temp_json_path = f"data_{uuid.uuid4()}.json"
-    zip_filename = f"secrets_{uuid.uuid4()}.zip"
+    # Must embed the run uuid: /cleanzip matches temp files by run uuid, so a
+    # fresh uuid4 here would never match and temp_zips/ would grow forever.
+    zip_filename = f"secrets_{myuuid}.zip"
     zip_path = "temp_zips/%s" % (zip_filename)
     Path("temp_zips").mkdir(parents=True, exist_ok=True)
 
